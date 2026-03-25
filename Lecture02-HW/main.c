@@ -40,9 +40,12 @@ typedef struct GameContext
 
 static GameContext g_game =
 {
-    0.0f, 0.0f, 0.002f, 1,
-    0, 0, 0, 0,
-    { 0 }
+    0.0f,    /* posX */
+    0.0f,    /* posY */
+    0.002f,  /* moveSpeed */
+    1,       /* isRunning */
+	0, 0, 0, 0,	   /* keyUp, keyDown, keyLeft, keyRight */
+	{ 0 }   /* hexagram vertices will be initialized in BuildHexagramVertices() */
 };
 
 /* =============================================================================
