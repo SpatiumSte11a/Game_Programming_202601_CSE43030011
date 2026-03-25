@@ -21,7 +21,32 @@ typedef struct Vertex
 } Vertex;
 
 /* =============================================================================
- * [2. DirectX Global Objects]
+ * [2. Game Context]
+ * ========================================================================== */
+typedef struct GameContext
+{
+    float posX;
+    float posY;
+    float moveSpeed;
+    int isRunning;
+
+    int keyUp;
+    int keyDown;
+    int keyLeft;
+    int keyRight;
+
+    Vertex hexagram[6];
+} GameContext;
+
+static GameContext g_game =
+{
+    0.0f, 0.0f, 0.01f, 1,
+    0, 0, 0, 0,
+    { 0 }
+};
+
+/* =============================================================================
+ * [3. DirectX Global Objects]
  * ========================================================================== */
 static ID3D11Device* g_pd3dDevice = NULL;
 static ID3D11DeviceContext* g_pImmediateContext = NULL;
@@ -34,7 +59,7 @@ static ID3D11Buffer* g_pVertexBuffer = NULL;
 static ID3D11RasterizerState* g_pRasterState = NULL;
 
 /* =============================================================================
- * [3. Shader Source]
+ * [4. Shader Source]
  * ========================================================================== */
 const char* g_shaderSource =
 "struct VS_INPUT { float3 pos : POSITION; float4 col : COLOR; };"
@@ -52,41 +77,158 @@ const char* g_shaderSource =
 "}";
 
 /* =============================================================================
- * [4. Static Hexagram Vertices]
+ * [5. Hexagram Builder]
  * ========================================================================== */
-void BuildStaticHexagram(Vertex* v)
+void BuildHexagramVertices(GameContext* ctx)
 {
-    /* --- [Up Triangle] ----------------------------------------------------- */
-    v[0].x = 0.00f;  v[0].y = 0.36f;  v[0].z = 0.5f;
-    v[1].x = -0.31f;  v[1].y = -0.18f;  v[1].z = 0.5f;
-    v[2].x = 0.31f;  v[2].y = -0.18f;  v[2].z = 0.5f;
+    float x = ctx->posX;
+    float y = ctx->posY;
 
-    v[0].r = 1.0f; v[0].g = 0.85f; v[0].b = 0.20f; v[0].a = 1.0f;
-    v[1].r = 1.0f; v[1].g = 0.35f; v[1].b = 0.20f; v[1].a = 1.0f;
-    v[2].r = 1.0f; v[2].g = 0.55f; v[2].b = 0.20f; v[2].a = 1.0f;
+    /* --- [Up Triangle] ----------------------------------------------------- */
+    ctx->hexagram[0].x = 0.00f + x;  ctx->hexagram[0].y = 0.36f + y;  ctx->hexagram[0].z = 0.5f;
+    ctx->hexagram[1].x = -0.31f + x;  ctx->hexagram[1].y = -0.18f + y;  ctx->hexagram[1].z = 0.5f;
+    ctx->hexagram[2].x = 0.31f + x;  ctx->hexagram[2].y = -0.18f + y;  ctx->hexagram[2].z = 0.5f;
+
+    ctx->hexagram[0].r = 1.0f; ctx->hexagram[0].g = 0.85f; ctx->hexagram[0].b = 0.20f; ctx->hexagram[0].a = 1.0f;
+    ctx->hexagram[1].r = 1.0f; ctx->hexagram[1].g = 0.35f; ctx->hexagram[1].b = 0.20f; ctx->hexagram[1].a = 1.0f;
+    ctx->hexagram[2].r = 1.0f; ctx->hexagram[2].g = 0.55f; ctx->hexagram[2].b = 0.20f; ctx->hexagram[2].a = 1.0f;
 
     /* --- [Down Triangle] --------------------------------------------------- */
-    v[3].x = 0.00f;  v[3].y = -0.36f;  v[3].z = 0.5f;
-    v[4].x = 0.31f;  v[4].y = 0.18f;  v[4].z = 0.5f;
-    v[5].x = -0.31f;  v[5].y = 0.18f;  v[5].z = 0.5f;
+    ctx->hexagram[3].x = 0.00f + x;  ctx->hexagram[3].y = -0.36f + y;  ctx->hexagram[3].z = 0.5f;
+    ctx->hexagram[4].x = 0.31f + x;  ctx->hexagram[4].y = 0.18f + y;  ctx->hexagram[4].z = 0.5f;
+    ctx->hexagram[5].x = -0.31f + x;  ctx->hexagram[5].y = 0.18f + y;  ctx->hexagram[5].z = 0.5f;
 
-    v[3].r = 0.20f; v[3].g = 0.80f; v[3].b = 1.0f; v[3].a = 1.0f;
-    v[4].r = 0.20f; v[4].g = 0.45f; v[4].b = 1.0f; v[4].a = 1.0f;
-    v[5].r = 0.45f; v[5].g = 0.20f; v[5].b = 1.0f; v[5].a = 1.0f;
+    ctx->hexagram[3].r = 0.20f; ctx->hexagram[3].g = 0.80f; ctx->hexagram[3].b = 1.0f; ctx->hexagram[3].a = 1.0f;
+    ctx->hexagram[4].r = 0.20f; ctx->hexagram[4].g = 0.45f; ctx->hexagram[4].b = 1.0f; ctx->hexagram[4].a = 1.0f;
+    ctx->hexagram[5].r = 0.45f; ctx->hexagram[5].g = 0.20f; ctx->hexagram[5].b = 1.0f; ctx->hexagram[5].a = 1.0f;
 }
 
 /* =============================================================================
- * [5. Window Procedure]
+ * [6. Initial Vertex Buffer Creation]
+ * ========================================================================== */
+int CreateInitialVertexBuffer(GameContext* ctx)
+{
+    HRESULT hr;
+    D3D11_BUFFER_DESC bd;
+    D3D11_SUBRESOURCE_DATA initData;
+
+    BuildHexagramVertices(ctx);
+
+    ZeroMemory(&bd, sizeof(bd));
+    bd.Usage = D3D11_USAGE_DEFAULT;
+    bd.ByteWidth = sizeof(Vertex) * 6;
+    bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    bd.CPUAccessFlags = 0;
+
+    ZeroMemory(&initData, sizeof(initData));
+    initData.pSysMem = ctx->hexagram;
+
+    hr = g_pd3dDevice->lpVtbl->CreateBuffer(
+        g_pd3dDevice,
+        &bd,
+        &initData,
+        &g_pVertexBuffer
+    );
+    if (FAILED(hr)) return 0;
+
+    return 1;
+}
+
+/* =============================================================================
+ * [7. Game Loop Stages]
+ * ========================================================================== */
+void ProcessInput(GameContext* ctx)
+{
+    (void)ctx;
+}
+
+void UpdateGame(GameContext* ctx)
+{
+    (void)ctx;
+}
+
+void RenderGame(void)
+{
+    float clearColor[4] = { 0.05f, 0.10f, 0.18f, 1.0f };
+    D3D11_VIEWPORT vp;
+    UINT stride = sizeof(Vertex);
+    UINT offset = 0;
+
+    g_pImmediateContext->lpVtbl->ClearRenderTargetView(
+        g_pImmediateContext,
+        g_pRenderTargetView,
+        clearColor
+    );
+
+    g_pImmediateContext->lpVtbl->OMSetRenderTargets(
+        g_pImmediateContext,
+        1,
+        &g_pRenderTargetView,
+        NULL
+    );
+
+    vp.TopLeftX = 0.0f;
+    vp.TopLeftY = 0.0f;
+    vp.Width = 800.0f;
+    vp.Height = 600.0f;
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+
+    g_pImmediateContext->lpVtbl->RSSetViewports(g_pImmediateContext, 1, &vp);
+    g_pImmediateContext->lpVtbl->RSSetState(g_pImmediateContext, g_pRasterState);
+    g_pImmediateContext->lpVtbl->IASetInputLayout(g_pImmediateContext, g_pVertexLayout);
+    g_pImmediateContext->lpVtbl->IASetVertexBuffers(
+        g_pImmediateContext,
+        0,
+        1,
+        &g_pVertexBuffer,
+        &stride,
+        &offset
+    );
+    g_pImmediateContext->lpVtbl->IASetPrimitiveTopology(
+        g_pImmediateContext,
+        D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
+    );
+
+    g_pImmediateContext->lpVtbl->VSSetShader(g_pImmediateContext, g_pVertexShader, NULL, 0);
+    g_pImmediateContext->lpVtbl->PSSetShader(g_pImmediateContext, g_pPixelShader, NULL, 0);
+
+    g_pImmediateContext->lpVtbl->Draw(g_pImmediateContext, 6, 0);
+    g_pSwapChain->lpVtbl->Present(g_pSwapChain, 0, 0);
+}
+
+/* =============================================================================
+ * [8. Window Procedure]
  * ========================================================================== */
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     (void)hWnd;
-    (void)wParam;
     (void)lParam;
 
     switch (message)
     {
+    case WM_KEYDOWN:
+        if (wParam == VK_UP || wParam == 'W') g_game.keyUp = 1;
+        if (wParam == VK_DOWN || wParam == 'S') g_game.keyDown = 1;
+        if (wParam == VK_LEFT || wParam == 'A') g_game.keyLeft = 1;
+        if (wParam == VK_RIGHT || wParam == 'D') g_game.keyRight = 1;
+
+        if (wParam == 'Q')
+        {
+            g_game.isRunning = 0;
+            PostQuitMessage(0);
+        }
+        return 0;
+
+    case WM_KEYUP:
+        if (wParam == VK_UP || wParam == 'W') g_game.keyUp = 0;
+        if (wParam == VK_DOWN || wParam == 'S') g_game.keyDown = 0;
+        if (wParam == VK_LEFT || wParam == 'A') g_game.keyLeft = 0;
+        if (wParam == VK_RIGHT || wParam == 'D') g_game.keyRight = 0;
+        return 0;
+
     case WM_DESTROY:
+        g_game.isRunning = 0;
         PostQuitMessage(0);
         return 0;
     }
@@ -95,7 +237,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 }
 
 /* =============================================================================
- * [6. DirectX Initialization]
+ * [9. DirectX Initialization]
  * ========================================================================== */
 int InitD3D(HWND hWnd)
 {
@@ -106,11 +248,6 @@ int InitD3D(HWND hWnd)
     ID3DBlob* pPSBlob = NULL;
     D3D11_INPUT_ELEMENT_DESC layout[2];
     D3D11_RASTERIZER_DESC rsDesc;
-    D3D11_BUFFER_DESC bd;
-    D3D11_SUBRESOURCE_DATA initData;
-    Vertex vertices[6];
-
-    BuildStaticHexagram(vertices);
 
     ZeroMemory(&sd, sizeof(sd));
     sd.BufferCount = 1;
@@ -233,22 +370,8 @@ int InitD3D(HWND hWnd)
     pVSBlob->lpVtbl->Release(pVSBlob);
     pPSBlob->lpVtbl->Release(pPSBlob);
 
-    ZeroMemory(&bd, sizeof(bd));
-    bd.Usage = D3D11_USAGE_DEFAULT;
-    bd.ByteWidth = sizeof(Vertex) * 6;
-    bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    bd.CPUAccessFlags = 0;
-
-    ZeroMemory(&initData, sizeof(initData));
-    initData.pSysMem = vertices;
-
-    hr = g_pd3dDevice->lpVtbl->CreateBuffer(
-        g_pd3dDevice,
-        &bd,
-        &initData,
-        &g_pVertexBuffer
-    );
-    if (FAILED(hr)) return 0;
+    if (!CreateInitialVertexBuffer(&g_game))
+        return 0;
 
     ZeroMemory(&rsDesc, sizeof(rsDesc));
     rsDesc.FillMode = D3D11_FILL_SOLID;
@@ -266,60 +389,7 @@ int InitD3D(HWND hWnd)
 }
 
 /* =============================================================================
- * [7. Render]
- * ========================================================================== */
-void RenderGame(void)
-{
-    float clearColor[4] = { 0.05f, 0.10f, 0.18f, 1.0f };
-    D3D11_VIEWPORT vp;
-    UINT stride = sizeof(Vertex);
-    UINT offset = 0;
-
-    g_pImmediateContext->lpVtbl->ClearRenderTargetView(
-        g_pImmediateContext,
-        g_pRenderTargetView,
-        clearColor
-    );
-
-    g_pImmediateContext->lpVtbl->OMSetRenderTargets(
-        g_pImmediateContext,
-        1,
-        &g_pRenderTargetView,
-        NULL
-    );
-
-    vp.TopLeftX = 0.0f;
-    vp.TopLeftY = 0.0f;
-    vp.Width = 800.0f;
-    vp.Height = 600.0f;
-    vp.MinDepth = 0.0f;
-    vp.MaxDepth = 1.0f;
-
-    g_pImmediateContext->lpVtbl->RSSetViewports(g_pImmediateContext, 1, &vp);
-    g_pImmediateContext->lpVtbl->RSSetState(g_pImmediateContext, g_pRasterState);
-    g_pImmediateContext->lpVtbl->IASetInputLayout(g_pImmediateContext, g_pVertexLayout);
-    g_pImmediateContext->lpVtbl->IASetVertexBuffers(
-        g_pImmediateContext,
-        0,
-        1,
-        &g_pVertexBuffer,
-        &stride,
-        &offset
-    );
-    g_pImmediateContext->lpVtbl->IASetPrimitiveTopology(
-        g_pImmediateContext,
-        D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST
-    );
-
-    g_pImmediateContext->lpVtbl->VSSetShader(g_pImmediateContext, g_pVertexShader, NULL, 0);
-    g_pImmediateContext->lpVtbl->PSSetShader(g_pImmediateContext, g_pPixelShader, NULL, 0);
-
-    g_pImmediateContext->lpVtbl->Draw(g_pImmediateContext, 6, 0);
-    g_pSwapChain->lpVtbl->Present(g_pSwapChain, 0, 0);
-}
-
-/* =============================================================================
- * [8. Cleanup]
+ * [10. Cleanup]
  * ========================================================================== */
 void CleanupD3D(void)
 {
@@ -335,7 +405,7 @@ void CleanupD3D(void)
 }
 
 /* =============================================================================
- * [9. WinMain]
+ * [11. WinMain]
  * ========================================================================== */
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -359,7 +429,7 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
 
     hWnd = CreateWindowW(
         L"Lecture02HWClass",
-        L"Lecture02 HW - Commit 2",
+        L"Lecture02 HW",
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -380,11 +450,21 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     if (!InitD3D(hWnd))
         return -1;
 
-    while (GetMessage(&msg, NULL, 0, 0))
+    ZeroMemory(&msg, sizeof(msg));
+
+    while (WM_QUIT != msg.message && g_game.isRunning)
     {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-        RenderGame();
+        if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        else
+        {
+            ProcessInput(&g_game);
+            UpdateGame(&g_game);
+            RenderGame();
+        }
     }
 
     CleanupD3D();
