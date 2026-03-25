@@ -40,7 +40,7 @@ typedef struct GameContext
 
 static GameContext g_game =
 {
-    0.0f, 0.0f, 0.01f, 1,
+    0.0f, 0.0f, 0.002f, 1,
     0, 0, 0, 0,
     { 0 }
 };
