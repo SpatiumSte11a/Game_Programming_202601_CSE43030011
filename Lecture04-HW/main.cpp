@@ -37,7 +37,8 @@ ID3D11RenderTargetView* g_pRenderTargetView = nullptr;
 ID3D11VertexShader* g_pVertexShader = nullptr;
 ID3D11PixelShader* g_pPixelShader = nullptr;
 ID3D11InputLayout* g_pInputLayout = nullptr;
-ID3D11Buffer* g_pVertexBuffer = nullptr;
+ID3D11Buffer* g_pVertexBuffer1 = nullptr;
+ID3D11Buffer* g_pVertexBuffer2 = nullptr;
 
 // ============================================================
 // Triangle Data
@@ -48,19 +49,31 @@ struct Vertex
     float r, g, b, a;
 };
 
-// local triangle shape
-Vertex g_BaseTriangle[] =
+// local shape for the first triangle
+Vertex g_BaseTriangle1[] =
 {
     {  0.0f,  0.12f, 0.5f, 1.0f, 0.2f, 0.2f, 1.0f },
     {  0.10f, -0.10f, 0.5f, 1.0f, 0.2f, 0.2f, 1.0f },
     { -0.10f, -0.10f, 0.5f, 1.0f, 0.2f, 0.2f, 1.0f }
 };
 
-// first player position
-float g_TriangleX = 0.0f;
-float g_TriangleY = 0.0f;
+// local shape for the second triangle
+Vertex g_BaseTriangle2[] =
+{
+    {  0.0f,  0.12f, 0.5f, 0.2f, 0.8f, 1.0f, 1.0f },
+    {  0.10f, -0.10f, 0.5f, 0.2f, 0.8f, 1.0f, 1.0f },
+    { -0.10f, -0.10f, 0.5f, 0.2f, 0.8f, 1.0f, 1.0f }
+};
 
-// movement speed in normalized device coordinates
+// first triangle position
+float g_Triangle1X = -0.5f;
+float g_Triangle1Y = 0.0f;
+
+// second triangle position
+float g_Triangle2X = 0.5f;
+float g_Triangle2Y = 0.0f;
+
+// shared movement speed in normalized device coordinates
 float g_MoveSpeed = 0.8f;
 
 // simple passthrough shader
@@ -264,18 +277,35 @@ bool CreateTriangleResources()
         return false;
     }
 
-    D3D11_BUFFER_DESC bd = {};
-    bd.ByteWidth = sizeof(g_BaseTriangle);
-    bd.Usage = D3D11_USAGE_DEFAULT;
-    bd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    // vertex buffer for the first triangle
+    D3D11_BUFFER_DESC bd1 = {};
+    bd1.ByteWidth = sizeof(g_BaseTriangle1);
+    bd1.Usage = D3D11_USAGE_DEFAULT;
+    bd1.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 
-    D3D11_SUBRESOURCE_DATA initData = {};
-    initData.pSysMem = g_BaseTriangle;
+    D3D11_SUBRESOURCE_DATA initData1 = {};
+    initData1.pSysMem = g_BaseTriangle1;
 
-    hr = g_pd3dDevice->CreateBuffer(&bd, &initData, &g_pVertexBuffer);
+    hr = g_pd3dDevice->CreateBuffer(&bd1, &initData1, &g_pVertexBuffer1);
     if (FAILED(hr))
     {
-        printf("CreateBuffer failed\n");
+        printf("CreateBuffer for triangle 1 failed\n");
+        return false;
+    }
+
+    // vertex buffer for the second triangle
+    D3D11_BUFFER_DESC bd2 = {};
+    bd2.ByteWidth = sizeof(g_BaseTriangle2);
+    bd2.Usage = D3D11_USAGE_DEFAULT;
+    bd2.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA initData2 = {};
+    initData2.pSysMem = g_BaseTriangle2;
+
+    hr = g_pd3dDevice->CreateBuffer(&bd2, &initData2, &g_pVertexBuffer2);
+    if (FAILED(hr))
+    {
+        printf("CreateBuffer for triangle 2 failed\n");
         return false;
     }
 
@@ -285,7 +315,7 @@ bool CreateTriangleResources()
 // ============================================================
 // Triangle Update
 // ============================================================
-void UpdateTrianglePosition(float dt)
+void UpdateTriangle1Position(float dt)
 {
     float vx = 0.0f;
     float vy = 0.0f;
@@ -296,31 +326,69 @@ void UpdateTrianglePosition(float dt)
     if (GetAsyncKeyState('A') & 0x8000) vx -= 1.0f;
     if (GetAsyncKeyState('D') & 0x8000) vx += 1.0f;
 
-    // position = position + velocity * deltaTime
-    g_TriangleX += vx * g_MoveSpeed * dt;
-    g_TriangleY += vy * g_MoveSpeed * dt;
+    g_Triangle1X += vx * g_MoveSpeed * dt;
+    g_Triangle1Y += vy * g_MoveSpeed * dt;
 
-    // keep the triangle inside the visible area
-    if (g_TriangleX < -0.85f) g_TriangleX = -0.85f;
-    if (g_TriangleX > 0.85f) g_TriangleX = 0.85f;
-    if (g_TriangleY < -0.85f) g_TriangleY = -0.85f;
-    if (g_TriangleY > 0.85f) g_TriangleY = 0.85f;
+    if (g_Triangle1X < -0.85f) g_Triangle1X = -0.85f;
+    if (g_Triangle1X > 0.85f) g_Triangle1X = 0.85f;
+    if (g_Triangle1Y < -0.85f) g_Triangle1Y = -0.85f;
+    if (g_Triangle1Y > 0.85f) g_Triangle1Y = 0.85f;
 }
 
-void UpdateTriangleBuffer()
+void UpdateTriangle2Position(float dt)
 {
-    // rebuild the current triangle vertices from local shape + position
+    float vx = 0.0f;
+    float vy = 0.0f;
+
+    // second triangle control
+    if (GetAsyncKeyState(VK_UP) & 0x8000)    vy += 1.0f;
+    if (GetAsyncKeyState(VK_DOWN) & 0x8000)  vy -= 1.0f;
+    if (GetAsyncKeyState(VK_LEFT) & 0x8000)  vx -= 1.0f;
+    if (GetAsyncKeyState(VK_RIGHT) & 0x8000) vx += 1.0f;
+
+    g_Triangle2X += vx * g_MoveSpeed * dt;
+    g_Triangle2Y += vy * g_MoveSpeed * dt;
+
+    if (g_Triangle2X < -0.85f) g_Triangle2X = -0.85f;
+    if (g_Triangle2X > 0.85f) g_Triangle2X = 0.85f;
+    if (g_Triangle2Y < -0.85f) g_Triangle2Y = -0.85f;
+    if (g_Triangle2Y > 0.85f) g_Triangle2Y = 0.85f;
+}
+
+void UpdateTriangle1Buffer()
+{
     Vertex currentVertices[3];
 
     for (int i = 0; i < 3; i++)
     {
-        currentVertices[i] = g_BaseTriangle[i];
-        currentVertices[i].x += g_TriangleX;
-        currentVertices[i].y += g_TriangleY;
+        currentVertices[i] = g_BaseTriangle1[i];
+        currentVertices[i].x += g_Triangle1X;
+        currentVertices[i].y += g_Triangle1Y;
     }
 
     g_pImmediateContext->UpdateSubresource(
-        g_pVertexBuffer,
+        g_pVertexBuffer1,
+        0,
+        nullptr,
+        currentVertices,
+        0,
+        0
+    );
+}
+
+void UpdateTriangle2Buffer()
+{
+    Vertex currentVertices[3];
+
+    for (int i = 0; i < 3; i++)
+    {
+        currentVertices[i] = g_BaseTriangle2[i];
+        currentVertices[i].x += g_Triangle2X;
+        currentVertices[i].y += g_Triangle2Y;
+    }
+
+    g_pImmediateContext->UpdateSubresource(
+        g_pVertexBuffer2,
         0,
         nullptr,
         currentVertices,
@@ -473,9 +541,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 RebuildVideoResources(hWnd);
             }
 
-            // update first triangle movement
-            UpdateTrianglePosition(deltaTime);
-            UpdateTriangleBuffer();
+            // update both triangle positions
+            UpdateTriangle1Position(deltaTime);
+            UpdateTriangle2Position(deltaTime);
+
+            // update both vertex buffers
+            UpdateTriangle1Buffer();
+            UpdateTriangle2Buffer();
 
             // ----------------------------------------------------
             // rendering
@@ -494,18 +566,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             g_pImmediateContext->RSSetViewports(1, &vp);
             g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, clearColor);
 
-            // draw current triangle state
-            UINT stride = sizeof(Vertex);
-            UINT offset = 0;
-
-            g_pImmediateContext->IASetVertexBuffers(0, 1, &g_pVertexBuffer, &stride, &offset);
             g_pImmediateContext->IASetInputLayout(g_pInputLayout);
             g_pImmediateContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
             g_pImmediateContext->VSSetShader(g_pVertexShader, nullptr, 0);
             g_pImmediateContext->PSSetShader(g_pPixelShader, nullptr, 0);
 
-            g_pImmediateContext->Draw(3, 0);
+            // draw first triangle
+            {
+                UINT stride = sizeof(Vertex);
+                UINT offset = 0;
+                g_pImmediateContext->IASetVertexBuffers(0, 1, &g_pVertexBuffer1, &stride, &offset);
+                g_pImmediateContext->Draw(3, 0);
+            }
+
+            // draw second triangle
+            {
+                UINT stride = sizeof(Vertex);
+                UINT offset = 0;
+                g_pImmediateContext->IASetVertexBuffers(0, 1, &g_pVertexBuffer2, &stride, &offset);
+                g_pImmediateContext->Draw(3, 0);
+            }
 
             g_pSwapChain->Present(g_Config.VSync, 0);
         }
@@ -514,7 +594,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     // ============================================================
     // Cleanup
     // ============================================================
-    if (g_pVertexBuffer) g_pVertexBuffer->Release();
+    if (g_pVertexBuffer1) g_pVertexBuffer1->Release();
+    if (g_pVertexBuffer2) g_pVertexBuffer2->Release();
     if (g_pInputLayout) g_pInputLayout->Release();
     if (g_pVertexShader) g_pVertexShader->Release();
     if (g_pPixelShader) g_pPixelShader->Release();
